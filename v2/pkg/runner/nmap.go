@@ -11,6 +11,7 @@ import (
 
 	"github.com/projectdiscovery/gologger"
 	"github.com/projectdiscovery/naabu/v2/pkg/result"
+	osutil "github.com/projectdiscovery/utils/os"
 )
 
 func (r *Runner) handleNmap() error {
@@ -62,11 +63,11 @@ func (r *Runner) handleNmap() error {
 			for _, ipPorts := range rang {
 				ips = append(ips, ipPorts.IP)
 				for _, pp := range ipPorts.Ports {
-					allports[pp] = struct{}{}
+					allports[pp.Port] = struct{}{}
 				}
 			}
 			for p := range allports {
-				ports = append(ports, fmt.Sprintf("%d", p))
+				ports = append(ports, fmt.Sprint(p))
 			}
 
 			// if we have no open ports we avoid running nmap
@@ -86,7 +87,22 @@ func (r *Runner) handleNmap() error {
 			// if requested via config file or via cli
 			if (r.options.Nmap || hasCLI) && commandCanBeExecuted {
 				gologger.Info().Msgf("Running nmap command: %s -p %s %s", command, portsStr, ipsStr)
-				cmd := exec.Command(args[0], args[1:]...)
+				// check when user type '-nmap-cli "nmap -sV"'
+				// automatically remove nmap
+				posArgs := 0
+				// nmapCommand helps to check if user is on a Windows machine
+				nmapCommand := "nmap"
+				if args[0] == "nmap" || args[0] == "nmap.exe" {
+					posArgs = 1
+				}
+
+				// if it's windows search for the executable
+				if osutil.IsWindows() {
+					nmapCommand = "nmap.exe"
+				}
+
+				cmd := exec.Command(nmapCommand, args[posArgs:]...)
+
 				cmd.Stdout = os.Stdout
 				err := cmd.Run()
 				if err != nil {
@@ -105,7 +121,7 @@ func (r *Runner) handleNmap() error {
 
 func isCommandExecutable(args []string) bool {
 	commandLength := calculateCmdLength(args)
-	if isWindows() {
+	if osutil.IsWindows() {
 		// windows has a hard limit of
 		// - 2048 characters in XP
 		// - 32768 characters in Win7

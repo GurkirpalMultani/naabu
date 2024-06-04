@@ -19,11 +19,11 @@
   <a href="#running-naabu">Running naabu</a> •
   <a href="#configuration-file">Config</a> •
   <a href="#nmap-integration">NMAP integration</a> •
-  <a href="#cdn-exclusion">CDN Exclusion</a> •
+  <a href="#cdn-waf-exclusion">CDN/WAF Exclusion</a> •
   <a href="https://discord.gg/projectdiscovery">Discord</a>
 </p>
 
-Naabu is a port scanning tool written in Go that allows you to enumerate valid ports for hosts in a fast and reliable manner. It is a really simple tool that does fast SYN/CONNECT scans on the host/list of hosts and lists
+Naabu is a port scanning tool written in Go that allows you to enumerate valid ports for hosts in a fast and reliable manner. It is a really simple tool that does fast SYN/CONNECT/UDP scans on the host/list of hosts and lists
 all ports that return a reply.
 
 # Features
@@ -33,7 +33,7 @@ all ports that return a reply.
   <br>
 </h1>
 
- - Fast And Simple **SYN/CONNECT** probe based scanning
+ - Fast And Simple **SYN/CONNECT/UDP** probe based scanning
  - Optimized for ease of use and **lightweight** on resources
  - **DNS** Port scan
  - **Automatic IP Deduplication** for DNS port scan
@@ -64,39 +64,44 @@ INPUT:
 
 PORT:
    -port, -p string            ports to scan (80,443, 100-200)
-   -top-ports, -tp string      top ports to scan (default 100)
+   -top-ports, -tp string      top ports to scan (default 100) [full,100,1000]
    -exclude-ports, -ep string  ports to exclude from scan (comma-separated)
    -ports-file, -pf string     list of ports to scan (file)
    -port-threshold, -pts int   port threshold to skip port scan for the host
-   -exclude-cdn, -ec           skip full port scans for CDN's (only checks for 80,443)
+   -exclude-cdn, -ec           skip full port scans for CDN/WAF (only scan for port 80,443)
    -display-cdn, -cdn          display cdn in use
 
 RATE-LIMIT:
    -c int     general internal worker threads (default 25)
    -rate int  packets to send per second (default 1000)
 
+UPDATE:
+   -up, -update                 update naabu to latest version
+   -duc, -disable-update-check  disable automatic naabu update check
+
 OUTPUT:
    -o, -output string  file to write output to (optional)
-   -json               write output in JSON lines format
+   -j, -json           write output in JSON lines format
    -csv                write output in csv format
 
 CONFIGURATION:
-   -scan-all-ips, -sa                  scan all the IP's associated with DNS record
-   -ip-version, -iv string[]           ip version to scan of hostname (4,6) - (default 4)
-   -scan-type, -s string               type of port scan (SYN/CONNECT) (default "s")
-   -source-ip string                   source ip and port (x.x.x.x:yyy)
-   -interface-list, -il                list available interfaces and public ip
-   -interface, -i string               network Interface to use for port scan
-   -nmap                               invoke nmap scan on targets (nmap must be installed) - Deprecated
-   -nmap-cli string                    nmap command to run on found results (example: -nmap-cli 'nmap -sV')
-   -r string                           list of custom resolver dns resolution (comma separated or from file)
-   -proxy string                       socks5 proxy (ip[:port] / fqdn[:port]
-   -proxy-auth string                  socks5 proxy authentication (username:password)
-   -resume                             resume scan using resume.cfg
-   -stream                             stream mode (disables resume, nmap, verify, retries, shuffling, etc)
-   -passive                            display passive open ports using shodan internetdb api
-   -irt, -input-read-timeout duration  timeout on input read (default 3m0s)
-   -no-stdin                           Disable Stdin processing
+   -config string                   path to the naabu configuration file (default $HOME/.config/naabu/config.yaml)
+   -scan-all-ips, -sa               scan all the IP's associated with DNS record
+   -ip-version, -iv string[]        ip version to scan of hostname (4,6) - (default 4) (default ["4"])
+   -scan-type, -s string            type of port scan (SYN/CONNECT) (default "s")
+   -source-ip string                source ip and port (x.x.x.x:yyy)
+   -interface-list, -il             list available interfaces and public ip
+   -interface, -i string            network Interface to use for port scan
+   -nmap                            invoke nmap scan on targets (nmap must be installed) - Deprecated
+   -nmap-cli string                 nmap command to run on found results (example: -nmap-cli 'nmap -sV')
+   -r string                        list of custom resolver dns resolution (comma separated or from file)
+   -proxy string                    socks5 proxy (ip[:port] / fqdn[:port]
+   -proxy-auth string               socks5 proxy authentication (username:password)
+   -resume                          resume scan using resume.cfg
+   -stream                          stream mode (disables resume, nmap, verify, retries, shuffling, etc)
+   -passive                         display passive open ports using shodan internetdb api
+   -irt, -input-read-timeout value  timeout on input read (default 3m0s)
+   -no-stdin                        Disable Stdin processing
 
 HOST-DISCOVERY:
    -sn, -host-discovery           Perform Only Host Discovery
@@ -108,6 +113,7 @@ HOST-DISCOVERY:
    -pm, -probe-icmp-address-mask  ICMP address mask request Ping (host discovery needs to be enabled)
    -arp, -arp-ping                ARP ping (host discovery needs to be enabled)
    -nd, -nd-ping                  IPv6 Neighbor Discovery (host discovery needs to be enabled)
+   -rev-ptr                       Reverse PTR lookup for input ips
 
 OPTIMIZATION:
    -retries int       number of retries for the port scan (default 3)
@@ -123,8 +129,9 @@ DEBUG:
    -no-color, -nc            disable colors in CLI output
    -silent                   display only results in output
    -version                  display version of naabu
-   -stats                    display stats of the running scan
-   -si, -stats-interval int  number of seconds to wait between showing a statistics update (default 5)
+   -stats                    display stats of the running scan (deprecated)
+   -si, -stats-interval int  number of seconds to wait between showing a statistics update (deprecated) (default 5)
+   -mp, -metrics-port int    port to expose naabu metrics on (default 63636)
 ```
 
 # Installation Instructions
@@ -135,7 +142,7 @@ Download the ready to run [binary](https://github.com/projectdiscovery/naabu/rel
 
 > **Note**: before installing naabu, make sure to install `libpcap` library for packet capturing.
 
-To install libcap on **Linux**: `sudo apt install -y libpcap-dev`, on **Mac**: `sudo brew install libpcap`
+To install libcap on **Linux**: `sudo apt install -y libpcap-dev`, on **Mac**: `brew install libpcap`
 
 
 ## Installing Naabu
@@ -174,13 +181,13 @@ hackerone.com:8443
 hackerone.com:8080
 ```
 
-The ports to scan for on the host can be specified via `-p` parameter. It takes nmap format ports and runs enumeration on them.
+The ports to scan for on the host can be specified via `-p` parameter (udp ports must be expressed as `u:port`). It takes nmap format ports and runs enumeration on them.
 
 ```sh
-naabu -p 80,443,21-23 -host hackerone.com
+naabu -p 80,443,21-23,u:53 -host hackerone.com
 ```
 
-By default, the Naabu checks for nmap's `Top 100` ports. It supports following in-built port lists -
+By default, the Naabu checks for nmap's `Top 100` ports. It supports the following in-built port lists -
 
 | Flag              | Description                          |
 |-------------------|--------------------------------------|
@@ -290,7 +297,7 @@ Available options to perform host discovery:
 
 - **ARP** ping (`-arp`)
 - TCP **SYN** ping (`-ps 80`)
-- TCP **ACK** ping (`-ps 443`)
+- TCP **ACK** ping (`-pa 443`)
 - ICMP **echo** ping (`-pe`)
 - ICMP **timestamp** ping (`-pp`)
 - ICMP **address mask** ping (`-pm`)
@@ -338,11 +345,14 @@ PORT     STATE SERVICE       VERSION
 8443/tcp open  ssl/https-alt cloudflare
 ```
 
-# CDN Exclusion
+# CDN/WAF Exclusion
 
-Naabu also supports excluding CDN IPs being port scanned. If used, only `80` and `443` ports get scanned for those IPs. This feature can be enabled by using `exclude-cdn` flag.
+Naabu also supports excluding CDN/WAF IPs being port scanned. If used, only `80` and `443` ports get scanned for those IPs. This feature can be enabled by using `exclude-cdn` flag.
 
 Currently `cloudflare`, `akamai`, `incapsula` and `sucuri` IPs are supported for exclusions.
+
+# Scan Status
+Naabu exposes json scan info on a local port bound to localhost at `http://localhost:63636/metrics` (the port can be changed via the `-metrics-port` flag)
 
 # Using naabu as library
 The following sample program scan the port `80` of `scanme.sh`. The results are returned via the `OnResult` callback:
@@ -360,9 +370,8 @@ import (
 
 func main() {
 	options := runner.Options{
-		ResumeCfg: &runner.ResumeCfg{},
-		Retries:   1,
 		Host:      goflags.StringSlice{"scanme.sh"},
+		ScanType: "s",
 		OnResult: func(hr *result.HostResult) {
 			log.Println(hr.Host, hr.Ports)
 		},

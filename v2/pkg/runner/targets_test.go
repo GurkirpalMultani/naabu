@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/projectdiscovery/ipranger"
-	"github.com/projectdiscovery/mapcidr/asn"
 	"github.com/projectdiscovery/naabu/v2/pkg/scan"
 	"github.com/stretchr/testify/require"
 )
@@ -14,9 +13,8 @@ func Test_AddTarget(t *testing.T) {
 	defer ipranger.Close()
 
 	r := &Runner{
-		options:   &Options{},
-		scanner:   &scan.Scanner{IPRanger: ipranger},
-		asnClient: asn.New(),
+		options: &Options{},
+		scanner: &scan.Scanner{IPRanger: ipranger},
 	}
 
 	// IPV6 Compressed should generate a warning
@@ -39,6 +37,7 @@ func Test_AddTarget(t *testing.T) {
 	err = r.AddTarget("127.0.0.1/24")
 	require.Nil(t, err, "ipv4 cidr incorrectly parsed")
 
-	err = r.AddTarget("AS14421")
-	require.Nil(t, err, "ASN incorrectly parsed")
+	// todo: excluding due to api instability (https://github.com/projectdiscovery/asnmap/issues/198)
+	// err = r.AddTarget("AS14421")
+	// require.Nil(t, err, "ASN incorrectly parsed")
 }

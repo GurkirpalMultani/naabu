@@ -7,10 +7,13 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/projectdiscovery/fileutil"
-	"github.com/projectdiscovery/iputil"
+	"github.com/projectdiscovery/naabu/v2/pkg/port"
 	"github.com/projectdiscovery/naabu/v2/pkg/privileges"
-	"github.com/projectdiscovery/sliceutil"
+	"github.com/projectdiscovery/naabu/v2/pkg/scan"
+	fileutil "github.com/projectdiscovery/utils/file"
+	iputil "github.com/projectdiscovery/utils/ip"
+	osutil "github.com/projectdiscovery/utils/os"
+	sliceutil "github.com/projectdiscovery/utils/slice"
 
 	"github.com/projectdiscovery/gologger"
 	"github.com/projectdiscovery/gologger/formatter"
@@ -24,8 +27,8 @@ var (
 	errTwoOutputMode = errors.New("both json and csv mode specified")
 )
 
-// validateOptions validates the configuration options passed
-func (options *Options) validateOptions() error {
+// ValidateOptions validates the configuration options passed
+func (options *Options) ValidateOptions() error {
 	// Check if Host, list of domains, or stdin info was provided.
 	// If none was provided, then return.
 	if options.Host == nil && options.HostsFile == "" && !options.Stdin && len(flag.Args()) == 0 {
@@ -96,7 +99,7 @@ func (options *Options) validateOptions() error {
 	}
 
 	// stream passive
-	if options.Verify && !options.Passive {
+	if options.Verify && options.Stream && !options.Passive {
 		return errors.New("verify not supported in stream active mode")
 	}
 
@@ -112,7 +115,7 @@ func (options *Options) validateOptions() error {
 		options.SourcePort = port
 	}
 
-	if len(options.IPVersion) > 0 && !sliceutil.ContainsItems([]string{"4", "6"}, options.IPVersion) {
+	if len(options.IPVersion) > 0 && !sliceutil.ContainsItems([]string{scan.IPv4, scan.IPv6}, options.IPVersion) {
 		return errors.New("IP Version must be 4 and/or 6")
 	}
 	// Return error if any host discovery releated option is provided but host discovery is disabled
@@ -122,6 +125,9 @@ func (options *Options) validateOptions() error {
 
 	// Host Discovery mode needs provileged access
 	if options.OnlyHostDiscovery && !privileges.IsPrivileged {
+		if osutil.IsWindows() {
+			return errors.New("host discovery not (yet) supported on windows")
+		}
 		return errors.New("sudo access required to perform host discovery")
 	}
 
@@ -129,14 +135,26 @@ func (options *Options) validateOptions() error {
 		return errors.New("port threshold must be between 0 and 65535")
 	}
 
+	if options.Proxy != "" && options.ScanType == SynScan {
+		gologger.Warning().Msgf("Syn Scan can't be used with socks proxy: falling back to connect scan")
+		options.ScanType = ConnectScan
+	}
+
+	if options.ScanType == SynScan && scan.PkgRouter == nil {
+		gologger.Warning().Msgf("Routing could not be determined (are you using a VPN?).falling back to connect scan")
+		options.ScanType = ConnectScan
+	}
+
 	return nil
 }
 
 // configureOutput configures the output on the screen
 func (options *Options) configureOutput() {
-	// If the user desires verbose output, show verbose output
 	if options.Verbose {
 		gologger.DefaultLogger.SetMaxLevel(levels.LevelVerbose)
+	}
+	if options.Debug {
+		gologger.DefaultLogger.SetMaxLevel(levels.LevelDebug)
 	}
 	if options.NoColor {
 		gologger.DefaultLogger.SetFormatter(formatter.NewCLI(true))
@@ -146,18 +164,27 @@ func (options *Options) configureOutput() {
 	}
 }
 
-// configureHostDiscovery enables default probes if none is specified
+// ConfigureHostDiscovery enables default probes if none is specified
 // but host discovery option was requested
-func (options *Options) configureHostDiscovery() {
+func (options *Options) configureHostDiscovery(ports []*port.Port) {
+	// if less than two ports are specified as input, reduce time and scan directly
+	if len(ports) <= 2 {
+		gologger.Info().Msgf("Host discovery disabled: less than two ports were specified")
+		options.SkipHostDiscovery = true
+	}
 	if options.shouldDiscoverHosts() && !options.hasProbes() {
 		// if no options were defined enable
 		// - ICMP Echo Request
 		// - ICMP timestamp
 		// - TCP SYN on port 80
+		// - TCP SYN on port 443
+		// - TCP ACK on port 80
 		// - TCP ACK on port 443
 		options.IcmpEchoRequestProbe = true
 		options.IcmpTimestampRequestProbe = true
 		options.TcpSynPingProbes = append(options.TcpSynPingProbes, "80")
+		options.TcpSynPingProbes = append(options.TcpSynPingProbes, "443")
+		options.TcpAckPingProbes = append(options.TcpAckPingProbes, "80")
 		options.TcpAckPingProbes = append(options.TcpAckPingProbes, "443")
 	}
 }

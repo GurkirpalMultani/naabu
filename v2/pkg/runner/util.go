@@ -2,11 +2,13 @@ package runner
 
 import (
 	"fmt"
-	"runtime"
+	"net"
 
 	"github.com/projectdiscovery/gologger"
-	"github.com/projectdiscovery/iputil"
-	"github.com/projectdiscovery/sliceutil"
+	"github.com/projectdiscovery/naabu/v2/pkg/scan"
+	iputil "github.com/projectdiscovery/utils/ip"
+	osutil "github.com/projectdiscovery/utils/os"
+	sliceutil "github.com/projectdiscovery/utils/slice"
 )
 
 func (r *Runner) host2ips(target string) (targetIPsV4 []string, targetIPsV6 []string, err error) {
@@ -19,10 +21,10 @@ func (r *Runner) host2ips(target string) (targetIPsV4 []string, targetIPsV6 []st
 			return nil, nil, err
 		}
 		if len(r.options.IPVersion) > 0 {
-			if sliceutil.Contains(r.options.IPVersion, "4") {
+			if sliceutil.Contains(r.options.IPVersion, scan.IPv4) {
 				targetIPsV4 = append(targetIPsV4, dnsData.A...)
 			}
-			if sliceutil.Contains(r.options.IPVersion, "6") {
+			if sliceutil.Contains(r.options.IPVersion, scan.IPv6) {
 				targetIPsV6 = append(targetIPsV6, dnsData.AAAA...)
 			}
 		} else {
@@ -40,17 +42,14 @@ func (r *Runner) host2ips(target string) (targetIPsV4 []string, targetIPsV6 []st
 }
 
 func isOSSupported() bool {
-	return isLinux() || isOSX()
+	return osutil.IsLinux() || osutil.IsOSX()
 }
 
-func isOSX() bool {
-	return runtime.GOOS == "darwin"
-}
+func getPort(target string) (string, string, bool) {
+	host, port, err := net.SplitHostPort(target)
+	if err == nil && iputil.IsPort(port) {
+		return host, port, true
+	}
 
-func isLinux() bool {
-	return runtime.GOOS == "linux"
-}
-
-func isWindows() bool {
-	return runtime.GOOS == "windows"
+	return target, "", false
 }

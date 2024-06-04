@@ -7,25 +7,24 @@ import (
 	"github.com/projectdiscovery/gologger"
 	"github.com/projectdiscovery/naabu/v2/pkg/privileges"
 	"github.com/projectdiscovery/naabu/v2/pkg/scan"
+	osutil "github.com/projectdiscovery/utils/os"
+	updateutils "github.com/projectdiscovery/utils/update"
 )
 
 const banner = `
                   __
   ___  ___  ___ _/ /  __ __
  / _ \/ _ \/ _ \/ _ \/ // /
-/_//_/\_,_/\_,_/_.__/\_,_/ v2.1.1
+/_//_/\_,_/\_,_/_.__/\_,_/
 `
 
 // Version is the current version of naabu
-const Version = `2.1.1`
+const version = `2.3.1`
 
 // showBanner is used to show the banner to the user
 func showBanner() {
 	gologger.Print().Msgf("%s\n", banner)
 	gologger.Print().Msgf("\t\tprojectdiscovery.io\n\n")
-
-	gologger.Print().Msgf("Use with caution. You are responsible for your actions\n")
-	gologger.Print().Msgf("Developers assume no liability and are not responsible for any misuse or damage.\n")
 }
 
 // showNetworkCapabilities shows the network capabilities/scan types possible with the running user
@@ -35,7 +34,7 @@ func showNetworkCapabilities(options *Options) {
 	switch {
 	case privileges.IsPrivileged && options.ScanType == SynScan:
 		accessLevel = "root"
-		if isLinux() {
+		if osutil.IsLinux() {
 			accessLevel = "CAP_NET_RAW"
 		}
 		scanType = "SYN"
@@ -89,4 +88,12 @@ func showNetworkInterfaces() error {
 	gologger.Info().Msgf("External Ip: %s\n", externalIP)
 
 	return nil
+}
+
+// GetUpdateCallback returns a callback function that updates naabu
+func GetUpdateCallback() func() {
+	return func() {
+		showBanner()
+		updateutils.GetUpdateToolCallback("naabu", version)()
+	}
 }
