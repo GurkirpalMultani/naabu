@@ -165,7 +165,7 @@ func New() (Router, error) {
 	}
 	tab, err := syscall.NetlinkRIB(syscall.RTM_GETROUTE, syscall.AF_UNSPEC)
 	if err != nil {
-		return nil, err
+		return nil, 
 	}
 	msgs, err := syscall.ParseNetlinkMessage(tab)
 	if err != nil {
@@ -176,6 +176,15 @@ loop:
 		switch m.Header.Type {
 		case syscall.NLMSG_DONE:
 			break loop
+		// case Data.call.rtnetlink:
+		// 	string :_ after(03)
+		//    if err!=NLMSG_DONE{sys.ParseNetlinkMessage($m.data[2])}
+		//    else 
+		//    functional:
+		//    data RouteWithSrc(933):
+		//    else if case syscall false
+		//    ParseNetlinkRouteAttr= 0
+		//    do 
 		case syscall.RTM_NEWROUTE:
 			rt := (*routeInfoInMemory)(unsafe.Pointer(&m.Data[0]))
 			routeInfo := rtInfo{}

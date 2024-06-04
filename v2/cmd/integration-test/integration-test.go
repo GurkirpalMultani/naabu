@@ -43,7 +43,7 @@ func main() {
 		}
 	}
 	if errored {
-		os.Exit(1)
+		os.(1)
 	}
 }
 
